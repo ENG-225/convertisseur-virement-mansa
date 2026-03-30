@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 import os
 import tempfile
+import re
 
 # Configuration de la page - Doit être la première commande Streamlit
 st.set_page_config(
@@ -53,7 +54,7 @@ st.markdown("""
     .logo-circle {
         width: 48px;
         height: 48px;
-        background: #002F6C;  /* Couleur bleu foncé professionnelle */
+        background: #002F6C;
         border-radius: 12px;
         display: flex;
         align-items: center;
@@ -100,7 +101,7 @@ st.markdown("""
     }
     
     .main-title span {
-        color: #002F6C;  /* Couleur signature */
+        color: #002F6C;
         font-weight: 700;
     }
     
@@ -144,7 +145,7 @@ st.markdown("""
     
     /* ===== BOUTONS ÉLÉGANTS ===== */
     .stButton > button {
-        background: #002F6C !important;  /* Bleu MANSA BANK */
+        background: #002F6C !important;
         color: white !important;
         border: none !important;
         border-radius: 12px !important;
@@ -157,7 +158,7 @@ st.markdown("""
     }
     
     .stButton > button:hover {
-        background: #001d44 !important;  /* Version plus foncée au survol */
+        background: #001d44 !important;
         transform: translateY(-1px) !important;
         box-shadow: 0 6px 14px rgba(0, 47, 108, 0.25) !important;
     }
@@ -292,14 +293,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------------
-# EN-TÊTE AVEC LE LOGO (À MODIFIER AVEC TA BONNE URL)
+# EN-TÊTE AVEC LE LOGO
 # -------------------------------------------------------------------
 st.markdown("""
 <div class="header-container">
     <div class="logo-area">
-        <!-- ICI : Remplace l'emoji et le cercle par l'URL directe de ton logo -->
-        <!-- Exemple avec une image : <img src="URL_DIRECTE_DU_LOGO" style="height: 50px; width: auto; border-radius: 8px;"> -->
-        <img src="https://brandfetch.com/mansabank.com?view=library&library=default&collection=logos&asset=idJ2dXWZQ_&utm_source=https%253A%252F%252Fbrandfetch.com%252Fmansabank.com&utm_medium=copyAction&utm_campaign=brandPageReferral" style="height: 50px; width: auto; border-radius: 8px;"> <!-- Placeholder, à remplacer -->
+        <div class="logo-circle">🏦</div>
         <div class="bank-name">
             <h1>MANSA BANK</h1>
             <p>Forgée par nos racines, tournée vers l'avenir</p>
@@ -322,50 +321,163 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------------
-# FONCTION DE TRAITEMENT (inchangée)
+# FONCTION CORRIGÉE POUR EXTRAIRE LE NUMÉRO DE COMPTE
+# -------------------------------------------------------------------
+def extraire_numero_compte(rib):
+    """
+    Extrait le numéro de compte (10 chiffres) d'un RIB selon deux formats possibles.
+    
+    Format 1 (avec CI93CI) : CI93CI + code banque(5) + code agence(5) + numéro compte(10) + clé(2)
+    Exemple: CI93CI1660200300313492410191 → supprimer 16 premiers + 2 derniers = 3134924101
+    
+    Format 2 (sans CI93) : CI + code banque(5) + code agence(5) + numéro compte(10) + clé(2)
+    Exemple: CI1660200300313492410191 → supprimer 12 premiers + 2 derniers = 3134924101
+    
+    La fonction s'applique de la même manière pour le RIB du donneur d'ordre et du bénéficiaire.
+    
+    Paramètres:
+    -----------
+    rib : str
+        Le RIB à traiter (peut contenir des espaces)
+    
+    Retourne:
+    ---------
+    str : Le numéro de compte de 10 chiffres
+    """
+    try:
+        # Étape 1: Supprimer tous les espaces
+        rib_str = str(rib).replace(' ', '').strip()
+        
+        if not rib_str:
+            return rib_str
+        
+        # Étape 2: Convertir en majuscules pour la détection (insensible à la casse)
+        rib_upper = rib_str.upper()
+        
+        # Étape 3: Détection du format et extraction
+        # FORMAT 1 : Commence par "CI93CI" (16 caractères à supprimer au début + 2 à la fin)
+        if rib_upper.startswith('CI93CI'):
+            if len(rib_str) > 18:  # Au moins 16 premiers + 2 derniers
+                numero_compte = rib_str[16:-2]  # Supprime 16 premiers et 2 derniers
+                # Vérifier que le résultat fait 10 chiffres
+                if len(numero_compte) == 10 and numero_compte.isdigit():
+                    return numero_compte
+        
+        # FORMAT 2 : Commence par "CI" (sans le 93) - 12 caractères à supprimer au début + 2 à la fin
+        elif rib_upper.startswith('CI') and not rib_upper.startswith('CI93CI'):
+            if len(rib_str) > 14:  # Au moins 12 premiers + 2 derniers
+                numero_compte = rib_str[12:-2]  # Supprime 12 premiers et 2 derniers
+                # Vérifier que le résultat fait 10 chiffres
+                if len(numero_compte) == 10 and numero_compte.isdigit():
+                    return numero_compte
+        
+        # Étape 4: Si les formats spécifiques n'ont pas fonctionné, chercher 10 chiffres consécutifs
+        match = re.search(r'\d{10}', rib_str)
+        if match:
+            return match.group()
+        
+        # Étape 5: En dernier recours, retourner le RIB original
+        return rib_str
+        
+    except Exception as e:
+        print(f"Erreur lors de l'extraction du numéro de compte: {e}")
+        return str(rib)
+
+
+# -------------------------------------------------------------------
+# FONCTION DE TRAITEMENT AVEC LA CORRECTION DE TRANSACTION.TYPE
 # -------------------------------------------------------------------
 def traiter_fichier(file_path_or_buffer):
     try:
+        # Étape 1 : Charger le fichier Excel
         df = pd.read_excel(file_path_or_buffer, header=None)
+        
+        # Étape 2 : Extraire le RIB du donneur d'ordre
         rib_donneur = df.iloc[1, 1]
+        
+        # Étape 3 : Supprimer les lignes 1 à 5
         df_clean = df.iloc[5:].reset_index(drop=True)
+        
+        # Étape 4 : Définir les noms des colonnes
         df_clean.columns = df_clean.iloc[0]
         df_clean = df_clean[1:].reset_index(drop=True)
+        
+        # Étape 5 : Supprimer les lignes et colonnes vides
         df_clean = df_clean.dropna(how='all').dropna(axis=1, how='all')
+        
+        # Étape 6 : Ajouter la colonne RIB du donneur d'ordre
         df_clean.insert(0, 'RIB DU DONNEUR D\'ORDRE', rib_donneur)
         
-        def extraire_partie_centrale(rib):
-            rib_str = str(rib).replace(' ', '')
-            if len(rib_str) > 17:
-                return rib_str[16:-2]
-            return rib_str
+        # Étape 7 : Appliquer la fonction d'extraction aux deux colonnes RIB
+        df_clean['RIB DU DONNEUR D\'ORDRE'] = df_clean['RIB DU DONNEUR D\'ORDRE'].apply(extraire_numero_compte)
+        df_clean['RIB DU BENEFICIAIRE'] = df_clean['RIB DU BENEFICIAIRE'].apply(extraire_numero_compte)
         
-        df_clean['RIB DU DONNEUR D\'ORDRE'] = df_clean['RIB DU DONNEUR D\'ORDRE'].apply(extraire_partie_centrale)
-        df_clean['RIB DU BENEFICIAIRE'] = df_clean['RIB DU BENEFICIAIRE'].apply(extraire_partie_centrale)
+        # Étape 8 : Créer le DataFrame final avec le nouvel ordre des colonnes
+        # Créer un dictionnaire avec toutes les colonnes - CORRECTION ICI
+        data = {
+            'TRANSACTION.TYPE': ['AC'] * len(df_clean),  # ← Valeur 'AC' répétée pour chaque ligne
+            'RIB DU DONNEUR D\'ORDRE': df_clean['RIB DU DONNEUR D\'ORDRE'],
+            'RIB DU BENEFICIAIRE': df_clean['RIB DU BENEFICIAIRE'],
+            'MONTANT': df_clean['MONTANT'],
+            'DEVISE DU VIREMENT': df_clean['DEVISE DU VIREMENT'],
+            'NOM BENEFICIAIRE': df_clean['NOM BENEFICIAIRE'],
+            'MOTIF': df_clean['MOTIF']
+        }
         
-        colonnes_utiles = [
-            'RIB DU DONNEUR D\'ORDRE', 'RIB DU BENEFICIAIRE', 'NOM BENEFICIAIRE',
-            'MONTANT', 'DEVISE DU VIREMENT', 'MOTIF'
-        ]
-        df_final = df_clean[colonnes_utiles].copy()
+        # Créer le DataFrame à partir du dictionnaire
+        df_final = pd.DataFrame(data)
+        
+        # Étape 9 : Ajouter la colonne DEBIT.VALUE.DATE en dernière position
         df_final['DEBIT.VALUE.DATE'] = datetime.now().strftime('%Y%m%d')
         
+        # Étape 10 : Renommer les colonnes selon le format standardisé
         df_final = df_final.rename(columns={
+            'TRANSACTION.TYPE': 'TRANSACTION.TYPE',
             'RIB DU DONNEUR D\'ORDRE': 'DEBIT.ACCT.NO',
             'RIB DU BENEFICIAIRE': 'CREDIT.ACCT.NO',
-            'NOM BENEFICIAIRE': 'DEBIT.THEIR.REF',
             'MONTANT': 'DEBIT.AMOUNT',
             'DEVISE DU VIREMENT': 'DEBIT.CURRENCY',
+            'NOM BENEFICIAIRE': 'DEBIT.THEIR.REF',
             'MOTIF': 'PAYMENT.DETAILS'
         })
         
+        # Réorganiser les colonnes dans l'ordre final souhaité
         ordre_colonnes = [
-            'DEBIT.ACCT.NO', 'CREDIT.ACCT.NO', 'DEBIT.THEIR.REF',
-            'DEBIT.AMOUNT', 'DEBIT.CURRENCY', 'PAYMENT.DETAILS', 'DEBIT.VALUE.DATE'
+            'TRANSACTION.TYPE',
+            'DEBIT.ACCT.NO',
+            'CREDIT.ACCT.NO',
+            'DEBIT.AMOUNT',
+            'DEBIT.CURRENCY',
+            'DEBIT.THEIR.REF',
+            'PAYMENT.DETAILS',
+            'DEBIT.VALUE.DATE'
         ]
+        
         return df_final[ordre_colonnes], None
+        
     except Exception as e:
         return None, str(e)
+
+
+# -------------------------------------------------------------------
+# FONCTION POUR FORMATER LE CSV SANS GUILLEMETS (CORRIGÉE)
+# -------------------------------------------------------------------
+def format_csv_like_sipic(df):
+    """
+    Formate le DataFrame en CSV simple SANS GUILLEMETS
+    Format attendu :
+    TRANSACTION.TYPE,DEBIT.ACCT.NO,CREDIT.ACCT.NO,DEBIT.AMOUNT,DEBIT.CURRENCY,DEBIT.THEIR.REF,PAYMENT.DETAILS,DEBIT.VALUE.DATE
+    """
+    import csv
+    import io
+    
+    output = io.StringIO()
+    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL, delimiter=',')
+    writer.writerow(df.columns.tolist())
+    writer.writerows(df.values.tolist())
+    
+    return output.getvalue()
+
 
 # -------------------------------------------------------------------
 # INTERFACE PRINCIPALE
@@ -395,10 +507,10 @@ with col1:
     if uploaded_file:
         source_fichier = uploaded_file
         nom_fichier = uploaded_file.name
-        st.success(f" **Fichier chargé :** {uploaded_file.name}")
+        st.success(f"✅ **Fichier chargé :** {uploaded_file.name}")
         try:
             df_preview = pd.read_excel(uploaded_file, header=None, nrows=5)
-            with st.expander(" Aperçu du fichier source", expanded=False):
+            with st.expander("🔍 Aperçu du fichier source", expanded=False):
                 st.dataframe(df_preview, use_container_width=True)
         except:
             pass
@@ -406,16 +518,16 @@ with col1:
     elif chemin_fichier and os.path.exists(chemin_fichier):
         source_fichier = chemin_fichier
         nom_fichier = os.path.basename(chemin_fichier)
-        st.success(f" **Fichier trouvé :** {nom_fichier}")
+        st.success(f"✅ **Fichier trouvé :** {nom_fichier}")
         try:
             df_preview = pd.read_excel(chemin_fichier, header=None, nrows=5)
-            with st.expander(" Aperçu du fichier source", expanded=False):
+            with st.expander("🔍 Aperçu du fichier source", expanded=False):
                 st.dataframe(df_preview, use_container_width=True)
         except:
             st.error("Impossible de lire l'aperçu.")
     
     elif chemin_fichier:
-        st.error(" Chemin invalide")
+        st.error("❌ Chemin invalide")
 
 with col2:
     st.markdown("""
@@ -427,65 +539,85 @@ with col2:
     """, unsafe_allow_html=True)
     
     if source_fichier:
-        st.info(f" Source : **{nom_fichier}**")
+        st.info(f"📄 Source : **{nom_fichier}**")
         
-        if st.button(" Lancer la conversion", use_container_width=True):
+        if st.button("🔄 Lancer la conversion", use_container_width=True):
             with st.spinner("Traitement en cours..."):
                 df_resultat, erreur = traiter_fichier(source_fichier)
                 
                 if erreur:
-                    st.error(f" Erreur : {erreur}")
+                    st.error(f"❌ Erreur : {erreur}")
                 else:
-                    st.success(" Conversion réussie !")
+                    st.success("✅ Conversion réussie !")
                     
+                    # Statistiques
                     st.markdown("<div class='stats-row'>", unsafe_allow_html=True)
                     cols = st.columns(3)
                     with cols[0]:
                         st.markdown(f"<div class='stat-box'><div class='stat-number'>{len(df_resultat)}</div><div class='stat-label'>Lignes</div></div>", unsafe_allow_html=True)
                     with cols[1]:
-                        st.markdown(f"<div class='stat-box'><div class='stat-number'>7</div><div class='stat-label'>Colonnes</div></div>", unsafe_allow_html=True)
+                        st.markdown(f"<div class='stat-box'><div class='stat-number'>8</div><div class='stat-label'>Colonnes</div></div>", unsafe_allow_html=True)
                     with cols[2]:
                         st.markdown(f"<div class='stat-box'><div class='stat-number'>{datetime.now().strftime('%d/%m')}</div><div class='stat-label'>Date</div></div>", unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
                     
-                    with st.expander(" Aperçu du résultat", expanded=True):
+                    # Aperçu du résultat
+                    with st.expander("👀 Aperçu du résultat", expanded=True):
                         st.dataframe(df_resultat.head(10), use_container_width=True)
                     
+                    # Téléchargement au format CSV sans guillemets
                     date_heure = datetime.now().strftime('%Y%m%d_%H%M%S')
-                    nom_sortie = f"VIREMENT_MANSA_{date_heure}.xlsx"
+                    nom_sortie = f"VIREMENT_MANSA_{date_heure}.csv"
+                    
+                    # Créer un fichier temporaire CSV sans guillemets
                     temp_dir = tempfile.gettempdir()
                     chemin_temp = os.path.join(temp_dir, nom_sortie)
                     
-                    with pd.ExcelWriter(chemin_temp, engine='openpyxl') as writer:
-                        df_resultat.to_excel(writer, index=False, sheet_name='VIREMENTS')
+                    # Formater le CSV sans guillemets
+                    csv_content = format_csv_like_sipic(df_resultat)
+                    
+                    # Sauvegarder le contenu formaté
+                    with open(chemin_temp, 'w', encoding='utf-8-sig', newline='') as f:
+                        f.write(csv_content)
                     
                     with open(chemin_temp, 'rb') as f:
                         st.download_button(
-                            label=" Télécharger le fichier",
+                            label="📥 Télécharger le fichier CSV (sans guillemets)",
                             data=f,
                             file_name=nom_sortie,
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            mime="text/csv",
                             use_container_width=True
                         )
                     
-                    try: os.remove(chemin_temp)
-                    except: pass
+                    try: 
+                        os.remove(chemin_temp)
+                    except: 
+                        pass
                     
+                    # Sauvegarde personnalisée
                     st.markdown("<br>", unsafe_allow_html=True)
-                    st.markdown("#####  Sauvegarde personnalisée")
-                    chemin_sauvegarde = st.text_input("Chemin de sauvegarde", placeholder="C:\\Users\\...\\mon_fichier.xlsx", key="save_path", label_visibility="collapsed")
+                    st.markdown("##### 💾 Sauvegarde personnalisée")
+                    chemin_sauvegarde = st.text_input("Chemin de sauvegarde (avec extension .csv)", 
+                                                     placeholder="C:\\Users\\...\\mon_fichier.csv", 
+                                                     key="save_path", 
+                                                     label_visibility="collapsed")
                     
                     col_btn1, col_btn2 = st.columns([1,5])
                     with col_btn2:
                         if chemin_sauvegarde and st.button("Sauvegarder à cet emplacement", key="save_btn", use_container_width=True):
                             try:
-                                with pd.ExcelWriter(chemin_sauvegarde, engine='openpyxl') as writer:
-                                    df_resultat.to_excel(writer, index=False, sheet_name='VIREMENTS')
-                                st.success(" Fichier sauvegardé avec succès")
+                                # S'assurer que l'extension est .csv
+                                if not chemin_sauvegarde.lower().endswith('.csv'):
+                                    chemin_sauvegarde += '.csv'
+                                
+                                # Sauvegarder sans guillemets
+                                with open(chemin_sauvegarde, 'w', encoding='utf-8-sig', newline='') as f:
+                                    f.write(csv_content)
+                                st.success("✅ Fichier CSV sauvegardé avec succès")
                             except Exception as e:
-                                st.error(f" Erreur : {e}")
+                                st.error(f"❌ Erreur : {e}")
     else:
-        st.warning(" Aucun fichier sélectionné")
+        st.warning("⚠️ Aucun fichier sélectionné")
         st.markdown("""
         <div style="background: #f9fafc; border-radius: 12px; padding: 1rem; margin-top: 1rem;">
             <p style="color: #5f6b7a; margin: 0;">📌 Chargez un fichier dans la section de gauche.</p>
@@ -506,7 +638,7 @@ with st.expander("ℹ️ Guide d'utilisation en 3 étapes", expanded=False):
     with gcols[1]:
         st.markdown("**2. Conversion**  \nCliquez sur 'Lancer la conversion'.")
     with gcols[2]:
-        st.markdown("**3. Téléchargement**  \nRécupérez votre fichier standardisé.")
+        st.markdown("**3. Téléchargement**  \nRécupérez votre fichier CSV standardisé (sans guillemets).")
 
 # -------------------------------------------------------------------
 # PIED DE PAGE
@@ -514,6 +646,6 @@ with st.expander("ℹ️ Guide d'utilisation en 3 étapes", expanded=False):
 st.markdown("""
 <div class="footer">
     <p>© 2024 MANSA BANK – Tous droits réservés</p>
-    <p style="font-size: 0.75rem;">Application de conversion automatique de fichiers de virement</p>
+    <p style="font-size: 0.75rem;">Application de conversion automatique de fichiers de virement au format CSV</p>
 </div>
 """, unsafe_allow_html=True)
