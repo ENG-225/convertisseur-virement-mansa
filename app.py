@@ -427,7 +427,7 @@ def traiter_fichier(file_path_or_buffer):
         df_final = pd.DataFrame(data)
         
         # Limiter le nom des bénéficiaires à 10 caractères
-        df_final['NOM BENEFICIAIRE'] = df_final['NOM BENEFICIAIRE'].astype(str).str[:10]
+        df_final['NOM BENEFICIAIRE'] = df_final['NOM BENEFICIAIRE'].astype(str).str[:11]
         
         # Étape 9 : Ajouter la colonne DEBIT.VALUE.DATE en dernière position
         df_final['DEBIT.VALUE.DATE'] = datetime.now().strftime('%Y%m%d')
