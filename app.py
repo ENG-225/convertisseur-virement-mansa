@@ -385,7 +385,7 @@ def extraire_numero_compte(rib):
 
 
 # -------------------------------------------------------------------
-# FONCTION DE TRAITEMENT AVEC LA CORRECTION DE TRANSACTION.TYPE
+# FONCTION DE TRAITEMENT AVEC LA CORRECTION DE TRANSACTION.TYPE ET LIMITATION DES NOMS À 10 CARACTÈRES
 # -------------------------------------------------------------------
 def traiter_fichier(file_path_or_buffer):
     try:
@@ -413,9 +413,8 @@ def traiter_fichier(file_path_or_buffer):
         df_clean['RIB DU BENEFICIAIRE'] = df_clean['RIB DU BENEFICIAIRE'].apply(extraire_numero_compte)
         
         # Étape 8 : Créer le DataFrame final avec le nouvel ordre des colonnes
-        # Créer un dictionnaire avec toutes les colonnes - CORRECTION ICI
         data = {
-            'TRANSACTION.TYPE': ['AC'] * len(df_clean),  # ← Valeur 'AC' répétée pour chaque ligne
+            'TRANSACTION.TYPE': ['AC'] * len(df_clean),
             'RIB DU DONNEUR D\'ORDRE': df_clean['RIB DU DONNEUR D\'ORDRE'],
             'RIB DU BENEFICIAIRE': df_clean['RIB DU BENEFICIAIRE'],
             'MONTANT': df_clean['MONTANT'],
@@ -426,6 +425,9 @@ def traiter_fichier(file_path_or_buffer):
         
         # Créer le DataFrame à partir du dictionnaire
         df_final = pd.DataFrame(data)
+        
+        # Limiter le nom des bénéficiaires à 10 caractères
+        df_final['NOM BENEFICIAIRE'] = df_final['NOM BENEFICIAIRE'].astype(str).str[:10]
         
         # Étape 9 : Ajouter la colonne DEBIT.VALUE.DATE en dernière position
         df_final['DEBIT.VALUE.DATE'] = datetime.now().strftime('%Y%m%d')
