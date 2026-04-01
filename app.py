@@ -385,7 +385,7 @@ def extraire_numero_compte(rib):
 
 
 # -------------------------------------------------------------------
-# FONCTION DE TRAITEMENT AVEC LA CORRECTION DE TRANSACTION.TYPE ET LIMITATION DES NOMS À 10 CARACTÈRES
+# FONCTION DE TRAITEMENT
 # -------------------------------------------------------------------
 def traiter_fichier(file_path_or_buffer):
     try:
@@ -426,8 +426,7 @@ def traiter_fichier(file_path_or_buffer):
         # Créer le DataFrame à partir du dictionnaire
         df_final = pd.DataFrame(data)
         
-        # Limiter le nom des bénéficiaires à 10 caractères
-        df_final['NOM BENEFICIAIRE'] = df_final['NOM BENEFICIAIRE'].astype(str).str[:10]
+        # Ne pas limiter le nom à 10 caractères (garder le nom complet)
         
         # Étape 9 : Ajouter la colonne DEBIT.VALUE.DATE en dernière position
         df_final['DEBIT.VALUE.DATE'] = datetime.now().strftime('%Y%m%d')
@@ -462,18 +461,19 @@ def traiter_fichier(file_path_or_buffer):
 
 
 # -------------------------------------------------------------------
-# FONCTION POUR FORMATER LE CSV STANDARD AVEC VIRGULES (TABLEAU EXCEL)
+# FONCTION POUR FORMATER LE CSV AVEC POINT-VIRGULE (;)
 # -------------------------------------------------------------------
-def format_csv_standard(df):
+def format_csv_semicolon(df):
     """
-    Formate le DataFrame en CSV standard avec virgules comme séparateur
-    Ce format s'ouvre automatiquement en tableau dans Excel
+    Formate le DataFrame en CSV avec point-virgule (;) comme séparateur
+    Format identique au fichier : Copie de RELIQUAT SALAIRE SILO FEV.csv
     """
     import csv
     import io
     
     output = io.StringIO()
-    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL, delimiter=',')
+    # Utilisation du point-virgule comme délimiteur
+    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL, delimiter=';')
     writer.writerow(df.columns.tolist())
     writer.writerows(df.values.tolist())
     
@@ -566,24 +566,24 @@ with col2:
                     with st.expander("👀 Aperçu du résultat", expanded=True):
                         st.dataframe(df_resultat.head(10), use_container_width=True)
                     
-                    # Téléchargement au format CSV standard avec virgules
+                    # Téléchargement au format CSV avec point-virgule (;)
                     date_heure = datetime.now().strftime('%Y%m%d_%H%M%S')
                     nom_sortie = f"VIREMENT_MANSA_{date_heure}.csv"
                     
-                    # Créer un fichier temporaire CSV standard (avec virgules)
+                    # Créer un fichier temporaire
                     temp_dir = tempfile.gettempdir()
                     chemin_temp = os.path.join(temp_dir, nom_sortie)
                     
-                    # Formater le CSV standard avec virgules
-                    csv_content = format_csv_standard(df_resultat)
+                    # Formater le CSV avec point-virgule
+                    csv_content = format_csv_semicolon(df_resultat)
                     
-                    # Sauvegarder le contenu formaté
-                    with open(chemin_temp, 'w', encoding='utf-8-sig', newline='') as f:
+                    # Sauvegarder sans BOM
+                    with open(chemin_temp, 'w', encoding='utf-8', newline='') as f:
                         f.write(csv_content)
                     
                     with open(chemin_temp, 'rb') as f:
                         st.download_button(
-                            label="📥 Télécharger le fichier CSV (format tableau Excel)",
+                            label="📥 Télécharger le fichier CSV (format point-virgule)",
                             data=f,
                             file_name=nom_sortie,
                             mime="text/csv",
@@ -611,8 +611,8 @@ with col2:
                                 if not chemin_sauvegarde.lower().endswith('.csv'):
                                     chemin_sauvegarde += '.csv'
                                 
-                                # Sauvegarder au format CSV standard avec virgules
-                                with open(chemin_sauvegarde, 'w', encoding='utf-8-sig', newline='') as f:
+                                # Sauvegarder avec point-virgule
+                                with open(chemin_sauvegarde, 'w', encoding='utf-8', newline='') as f:
                                     f.write(csv_content)
                                 st.success("✅ Fichier CSV sauvegardé avec succès")
                             except Exception as e:
@@ -639,7 +639,7 @@ with st.expander("ℹ️ Guide d'utilisation en 3 étapes", expanded=False):
     with gcols[1]:
         st.markdown("**2. Conversion**  \nCliquez sur 'Lancer la conversion'.")
     with gcols[2]:
-        st.markdown("**3. Téléchargement**  \nRécupérez votre fichier CSV standardisé qui s'ouvre en tableau dans Excel.")
+        st.markdown("**3. Téléchargement**  \nRécupérez votre fichier CSV au format point-virgule (;)")
 
 # -------------------------------------------------------------------
 # PIED DE PAGE
@@ -647,6 +647,6 @@ with st.expander("ℹ️ Guide d'utilisation en 3 étapes", expanded=False):
 st.markdown("""
 <div class="footer">
     <p>© 2024 MANSA BANK – Tous droits réservés</p>
-    <p style="font-size: 0.75rem;">Application de conversion automatique de fichiers de virement au format CSV - S'ouvre en tableau dans Excel</p>
+    <p style="font-size: 0.75rem;">Application de conversion automatique de fichiers de virement au format CSV (séparateur point-virgule)</p>
 </div>
 """, unsafe_allow_html=True)
