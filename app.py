@@ -462,13 +462,12 @@ def traiter_fichier(file_path_or_buffer):
 
 
 # -------------------------------------------------------------------
-# FONCTION POUR FORMATER LE CSV SANS GUILLEMETS (CORRIGÉE)
+# FONCTION POUR FORMATER LE CSV STANDARD AVEC VIRGULES (TABLEAU EXCEL)
 # -------------------------------------------------------------------
-def format_csv_like_sipic(df):
+def format_csv_standard(df):
     """
-    Formate le DataFrame en CSV simple SANS GUILLEMETS
-    Format attendu :
-    TRANSACTION.TYPE,DEBIT.ACCT.NO,CREDIT.ACCT.NO,DEBIT.AMOUNT,DEBIT.CURRENCY,DEBIT.THEIR.REF,PAYMENT.DETAILS,DEBIT.VALUE.DATE
+    Formate le DataFrame en CSV standard avec virgules comme séparateur
+    Ce format s'ouvre automatiquement en tableau dans Excel
     """
     import csv
     import io
@@ -567,16 +566,16 @@ with col2:
                     with st.expander("👀 Aperçu du résultat", expanded=True):
                         st.dataframe(df_resultat.head(10), use_container_width=True)
                     
-                    # Téléchargement au format CSV sans guillemets
+                    # Téléchargement au format CSV standard avec virgules
                     date_heure = datetime.now().strftime('%Y%m%d_%H%M%S')
                     nom_sortie = f"VIREMENT_MANSA_{date_heure}.csv"
                     
-                    # Créer un fichier temporaire CSV sans guillemets
+                    # Créer un fichier temporaire CSV standard (avec virgules)
                     temp_dir = tempfile.gettempdir()
                     chemin_temp = os.path.join(temp_dir, nom_sortie)
                     
-                    # Formater le CSV sans guillemets
-                    csv_content = format_csv_like_sipic(df_resultat)
+                    # Formater le CSV standard avec virgules
+                    csv_content = format_csv_standard(df_resultat)
                     
                     # Sauvegarder le contenu formaté
                     with open(chemin_temp, 'w', encoding='utf-8-sig', newline='') as f:
@@ -584,7 +583,7 @@ with col2:
                     
                     with open(chemin_temp, 'rb') as f:
                         st.download_button(
-                            label="📥 Télécharger le fichier CSV (sans guillemets)",
+                            label="📥 Télécharger le fichier CSV (format tableau Excel)",
                             data=f,
                             file_name=nom_sortie,
                             mime="text/csv",
@@ -612,7 +611,7 @@ with col2:
                                 if not chemin_sauvegarde.lower().endswith('.csv'):
                                     chemin_sauvegarde += '.csv'
                                 
-                                # Sauvegarder sans guillemets
+                                # Sauvegarder au format CSV standard avec virgules
                                 with open(chemin_sauvegarde, 'w', encoding='utf-8-sig', newline='') as f:
                                     f.write(csv_content)
                                 st.success("✅ Fichier CSV sauvegardé avec succès")
@@ -640,7 +639,7 @@ with st.expander("ℹ️ Guide d'utilisation en 3 étapes", expanded=False):
     with gcols[1]:
         st.markdown("**2. Conversion**  \nCliquez sur 'Lancer la conversion'.")
     with gcols[2]:
-        st.markdown("**3. Téléchargement**  \nRécupérez votre fichier CSV standardisé (sans guillemets).")
+        st.markdown("**3. Téléchargement**  \nRécupérez votre fichier CSV standardisé qui s'ouvre en tableau dans Excel.")
 
 # -------------------------------------------------------------------
 # PIED DE PAGE
@@ -648,6 +647,6 @@ with st.expander("ℹ️ Guide d'utilisation en 3 étapes", expanded=False):
 st.markdown("""
 <div class="footer">
     <p>© 2024 MANSA BANK – Tous droits réservés</p>
-    <p style="font-size: 0.75rem;">Application de conversion automatique de fichiers de virement au format CSV</p>
+    <p style="font-size: 0.75rem;">Application de conversion automatique de fichiers de virement au format CSV - S'ouvre en tableau dans Excel</p>
 </div>
 """, unsafe_allow_html=True)
