@@ -385,7 +385,7 @@ def extraire_numero_compte(rib):
 
 
 # -------------------------------------------------------------------
-# FONCTION DE TRAITEMENT
+# FONCTION DE TRAITEMENT AVEC LIMITATION DES NOMS À 10 CARACTÈRES
 # -------------------------------------------------------------------
 def traiter_fichier(file_path_or_buffer):
     try:
@@ -426,7 +426,8 @@ def traiter_fichier(file_path_or_buffer):
         # Créer le DataFrame à partir du dictionnaire
         df_final = pd.DataFrame(data)
         
-        # Ne pas limiter le nom à 10 caractères (garder le nom complet)
+        # 🔧 LIMITATION DU NOM À 10 CARACTÈRES (comme demandé)
+        df_final['NOM BENEFICIAIRE'] = df_final['NOM BENEFICIAIRE'].astype(str).str[:10]
         
         # Étape 9 : Ajouter la colonne DEBIT.VALUE.DATE en dernière position
         df_final['DEBIT.VALUE.DATE'] = datetime.now().strftime('%Y%m%d')
@@ -583,7 +584,7 @@ with col2:
                     
                     with open(chemin_temp, 'rb') as f:
                         st.download_button(
-                            label="📥 Télécharger le fichier CSV (format point-virgule)",
+                            label="📥 Télécharger le fichier CSV (format point-virgule - noms 10 caractères)",
                             data=f,
                             file_name=nom_sortie,
                             mime="text/csv",
@@ -639,7 +640,7 @@ with st.expander("ℹ️ Guide d'utilisation en 3 étapes", expanded=False):
     with gcols[1]:
         st.markdown("**2. Conversion**  \nCliquez sur 'Lancer la conversion'.")
     with gcols[2]:
-        st.markdown("**3. Téléchargement**  \nRécupérez votre fichier CSV au format point-virgule (;)")
+        st.markdown("**3. Téléchargement**  \nRécupérez votre fichier CSV avec noms limités à 10 caractères.")
 
 # -------------------------------------------------------------------
 # PIED DE PAGE
@@ -647,6 +648,6 @@ with st.expander("ℹ️ Guide d'utilisation en 3 étapes", expanded=False):
 st.markdown("""
 <div class="footer">
     <p>© 2024 MANSA BANK – Tous droits réservés</p>
-    <p style="font-size: 0.75rem;">Application de conversion automatique de fichiers de virement au format CSV (séparateur point-virgule)</p>
+    <p style="font-size: 0.75rem;">Application de conversion automatique de fichiers de virement au format CSV (séparateur point-virgule - noms à 10 caractères)</p>
 </div>
 """, unsafe_allow_html=True)
